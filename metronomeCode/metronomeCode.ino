@@ -1,27 +1,26 @@
-// Metronome timing variables
+// METRONOME TIMING VARIABLES
 int bpm;
 
-// LED and speaker pins
+// LED AND SPEAKER PINS
 // const int metronomeLed = ;
 // const int metronomeSpeaker = ;
 const int measureLed = 9;
 const int increaseLed = 5;
 const int decreaseLed = 11;
 
-// LED states
+// LED STATES
 int metronomeLedState = LOW;
 int measureLedState = LOW;
 int increaseLedState = LOW;
 int decreaseLedState = LOW;
 
-// Button pins
+// BUTTON PINS
 const int measureButton = 7;
 // const int noteButton = ;
 const int increaseButton = 10;
 const int decreaseButton = 12;
 
-// Button and debounce states and variables
-  // Button states in void loop
+// BUTTON STATES IN VOID LOOP
 bool buttonState;
 bool lastButtonState;
 bool measureButtonState;
@@ -30,7 +29,15 @@ bool increaseButtonState;
 bool lastIncreaseButtonState;
 bool decreaseButtonState;
 bool lastDecreaseButtonState;
-  // Button state variables used in debounce
+
+// INTERRUPT VARIABLES
+const int anyButton = 2;
+volatile byte measureState;
+volatile byte increaseState;
+volatile byte decreaseState;
+
+// DEBOUNCE VARIABLES
+  // Button state variables used in debounce 
 bool newDebounceState;
 bool lastDebounceState;
 bool currentDebounceState;
@@ -38,7 +45,7 @@ bool currentDebounceState;
 unsigned long lastButtonChangeTime = 0;
 unsigned long debounceDuration = 50;
 
-// Functions:
+// FUNCTIONS:
 // void loop
   // light up the led in accordance to the time signature
 // read a button (debounce)
@@ -52,18 +59,22 @@ unsigned long debounceDuration = 50;
 
 void setup() {
   // put your setup code here, to run once:
-  // Button pins
+  // BUTTON PINS
+  pinMode(anyButton, INPUT);
   pinMode(measureButton, INPUT);
   // pinMode(noteButton, INPUT);
   pinMode(increaseButton, INPUT);
   pinMode(decreaseButton, INPUT);
 
-  // LED and speaker pins
+  // LED AND SPEAKER PINS
   // pinMode(metronomeLed, OUTPUT);
   // pinMode(metronomeSpeaker, OUTPUT);
   pinMode(measureLed, OUTPUT);
   pinMode(increaseLed, OUTPUT);
   pinMode(decreaseLed, OUTPUT);
+
+  // INTERRUPT FUNCTION CALL
+  attachInterrupt(digitalPinToInterrupt(anyButton), buttonPress, RISING);
 }
 
 
@@ -105,6 +116,18 @@ int decreaseBPM(int bpm)
   return bpm;
 }
 
+// INTERRUPT FUNCTION
+void buttonPress() {
+  if(digitalRead(measureButton) == HIGH) {
+    measureState = HIGH;
+  }
+  else if(digitalRead(increaseButton) == HIGH ) {
+    increaseState = HIGH;
+  }
+  else if(digitalRead(decreaseButton) == HIGH) {
+    decreaseState = HIGH;
+  }
+}
 
 bool debounce( bool newDebounceState ) {
   if( newDebounceState != lastDebounceState ) {
