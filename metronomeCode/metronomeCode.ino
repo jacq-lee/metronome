@@ -6,6 +6,7 @@ const int increaseLed = 10;
 const int decreaseLed = 11;
 
 // BUTTON PINS
+const int anyButton = 2; // Output of OR gate, used in the interrupt function
 const int measureButton = 3;
 const int noteButton = 4;
 const int increaseButton = 5;
@@ -14,13 +15,8 @@ const int decreaseButton = 6;
 // BUTTON STATES IN VOID LOOP
 bool noteButtonState;
 bool lastNoteButtonState;
-bool increaseButtonState;
-bool lastIncreaseButtonState;
-bool decreaseButtonState;
-bool lastDecreaseButtonState;
 
 // INTERRUPT VARIABLES
-const int anyButton = 2;
 volatile byte measureState = LOW;
 volatile byte increaseState = LOW;
 volatile byte decreaseState = LOW;
@@ -36,41 +32,45 @@ unsigned long lastButtonChangeTime = 0;
 unsigned long debounceDuration = 50;
 
 // MEASURING VARIABLES
-  // in loop
+  // Used to toggle the time setting (Measure and Note buttons)
 bool measuring = LOW;
 bool noteMeasuring = HIGH;
-bool lastMeasureState;
-int startTime;
-int timeElapsed;
-int noteSpeed = 1000;
-int bpmChangeMultiplier = 1000;
-int bpmChange;
-int lastHigh;
-// in measurePress
-int timeOut = 100000;
-int quarterNote = 1000;
+  // Used for tracking the time between button presses
+unsigned long startTime;
+unsigned long timeElapsed;
+unsigned long lastHigh; // Specifically used to avoid debounce/press and hold issues
+int timeOut = 16000; // Device will exit measuring state if user does not press the measure button before this time
+
+// METRONOME VARIABLES
+int noteSpeed = 1000; // Default note speed
+int timeSignature = 4; // Default time signature
+int bpmChangeMultiplier = 1000; // Dictates how much bpm should increase/decrease by
+int bpmChange; // Integer value of by how many seconds the speed increases/decreases
   // in bleep
-int timeSignature = 4;
-int currentMillis;
-int lastMillis;
+unsigned long currentMillis;
+unsigned long lastMillis;
 int j = 0;
-const int bleepDuration = 100;
+const int bleepDuration = 100; // How long the LEDs/speaker turn on for
 
 // FUNCTIONS:
 // void loop
-  // light up the led in accordance to the time signature
-// read a button (debounce)
-// set the measure and note length
-// increase the bpm
-// decrease the bpm
-
-// interrupt
-  // after the measure button? or increase/decrease buttons have been pushed, set the new measure time?
+  // Receives input from the: 
+    // Measure button, then note button, to change the timing
+    // Increase button to increase the bpm
+    // Decrease button to decrease the bpm
+    // Note button to reset the timing (press + hold for 4 seconds)
+// void bleeping
+  // Blinks LEDs/speaker in accordance to noteSpeed and timeSignature
+// void buttonPress
+  // interrupt function that is called when any of measureButton, increaseButton, or decreaseButton are called
+  // digitalReads the inputs to tell which of the buttons was pressed, then sets corresponding flag high
+// bool debounce
+  // Prevents debounce issues when buttons are pressed (namely the noteButton for reset)
 
 
 void setup() {
   Serial.begin(9600);
-  
+
   // put your setup code here, to run once:
   // BUTTON PINS
   pinMode(anyButton, INPUT);
@@ -93,14 +93,6 @@ void setup() {
   TCCR1B = (1 << WGM01); // turns on CTC mode
   TCNT0 = 0; // initialize counter value to 0s // COUNTER ACCESS
 
-
-  // SET UP TIMER1
-  TCCR1A = 0; // initial value
-  TCCR1B = 0; // initial value
-  TCCR1B |= (1 << CS12); // prescaler for 256
-  TCNT1 = 0; // preload timer 
-  TIMSK1 |= (1 << TOIE1); // enable timer overflow interrupt
-
   // INTERRUPT FUNCTION CALL
   attachInterrupt(digitalPinToInterrupt(anyButton), buttonPress, RISING);
 }
@@ -112,12 +104,13 @@ void loop() {
   if( measureState == HIGH && (4*millis() - lastHigh > debounceDuration*2) ) {
     Serial.println("Setting Timing...");
     // Measuring state turns on
-    lastHigh = 4*millis();    
+    lastHigh = 4*millis();   
+    startTime = 4*millis(); // multiply by 4 to get proper time given 256 prescaler 
+    digitalWrite(noteLed, HIGH);
     measuring = HIGH; // Measuring the new timing is toggled on/off
     noteMeasuring = HIGH;
-    startTime = 4*millis(); // multiply by 4 to get proper time given 256 prescaler
-    digitalWrite(noteLed, HIGH);
     measureState = LOW;
+    Serial.println(startTime);
     
     // While loop: in process of measuring, waiting for second measure button input
     while(measuring == HIGH) {
@@ -156,14 +149,17 @@ void loop() {
       }
       // Time out and exit the statement by setting measuring to LOW
       else if( 4*millis() - startTime > timeOut ) {
+        Serial.println("Timed Out!");
+        Serial.println(startTime);      
         digitalWrite(measureLed, LOW);
         digitalWrite(noteLed, LOW);
         measuring = LOW;
+        noteMeasuring = LOW;
         measureState = LOW;
       }
     }
   }
-  else if( measureState == HIGH ) {
+  else if( measureState == HIGH ) { // measureButton was high from a previous button press
     measureState = LOW;
   }
   else if( (increaseState == HIGH) && (4*millis() - lastHigh > debounceDuration*2) ) {
@@ -183,7 +179,7 @@ void loop() {
         }
         else {
           lastHigh = 4*millis();
-          timeElapsed = (4*millis() - startTime); // Measure button was pushed a second time, length between button presses is the speed that the metronome goes (in s).
+          timeElapsed = (4*millis() - startTime); 
           bpmChange = timeElapsed/bpmChangeMultiplier;
           noteSpeed = noteSpeed - bpmChange*1000;
           if( noteSpeed < 500 ) {
@@ -206,7 +202,7 @@ void loop() {
       }
     }
   }
-  else if( increaseState == HIGH ) {
+  else if( increaseState == HIGH ) { // increaseButton was high from a previous button press
     increaseState = LOW;
   }
   else if( (decreaseState == HIGH) && (4*millis() - lastHigh > debounceDuration*2) ) {
@@ -249,10 +245,11 @@ void loop() {
       }
     }
   }
-  else if( decreaseState == HIGH ) {
+  else if( decreaseState == HIGH ) { // decreaseButton was high from a previous button press
     decreaseState = LOW;
   }
 
+  // RESET STATEMENT
   noteButtonState = debounce( (digitalRead(noteButton)) );
   if( noteButtonState == HIGH && lastNoteButtonState == LOW ) {
     Serial.println("Hold button for 4 seconds to reset...");
@@ -292,7 +289,7 @@ void loop() {
 }
 
 
-// OUTPUT 
+// OUTPUT, BLINK LEDs AND SPEAKER
 void bleeping(int noteSpeed, int timeSignature) {
 
   currentMillis = 4*millis();
@@ -316,7 +313,6 @@ void bleeping(int noteSpeed, int timeSignature) {
 }
 
 
-
 // INTERRUPT FUNCTION
 void buttonPress() {
   if( (4*millis() - lastPress) > debounceDuration ) { 
@@ -334,13 +330,7 @@ void buttonPress() {
 }
 
 
-// Interrupt on Timer 1 overflow.
-ISR(TIMER1_OVF_vect) {
-  TCNT1 = 0; // preload timer 
-  // change values to be reset
-}
-
-
+// DEBOUNCE FUNCTION
 bool debounce( bool newDebounceState ) {
   if( newDebounceState != lastDebounceState ) {
     lastButtonChangeTime = 4*millis();
