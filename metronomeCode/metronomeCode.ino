@@ -110,7 +110,6 @@ void loop() {
     measuring = HIGH; // Measuring the new timing is toggled on/off
     noteMeasuring = HIGH;
     measureState = LOW;
-    Serial.println(startTime);
     
     // While loop: in process of measuring, waiting for second measure button input
     while(measuring == HIGH) {
@@ -150,11 +149,10 @@ void loop() {
       // Time out and exit the statement by setting measuring to LOW
       else if( 4*millis() - startTime > timeOut ) {
         Serial.println("Timed Out!");
-        Serial.println(startTime);      
+        Serial.println();
         digitalWrite(measureLed, LOW);
         digitalWrite(noteLed, LOW);
         measuring = LOW;
-        noteMeasuring = LOW;
         measureState = LOW;
       }
     }
