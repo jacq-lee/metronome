@@ -35,6 +35,7 @@ unsigned long debounceDuration = 50;
   // Used to toggle the time setting (Measure and Note buttons)
 bool measuring = LOW;
 bool noteMeasuring = HIGH;
+bool resetFlag;
   // Used for tracking the time between button presses
 unsigned long startTime;
 unsigned long timeElapsed;
@@ -51,6 +52,7 @@ unsigned long currentMillis;
 unsigned long lastMillis;
 int j = 0;
 const int bleepDuration = 100; // How long the LEDs/speaker turn on for
+
 
 // FUNCTIONS:
 // void loop
@@ -69,6 +71,9 @@ const int bleepDuration = 100; // How long the LEDs/speaker turn on for
 
 
 void setup() {
+  
+  cli();//stop interrupts
+
   Serial.begin(9600);
 
   // put your setup code here, to run once:
@@ -90,11 +95,22 @@ void setup() {
   TCCR0A = 0; // set register to 0, TCCR0A controls PWM
   TCCR0B = 0; // set register to 0, TCCR0B controls the timer itself
   TCCR0B |= (1 << CS02); // 256 prescaler
-  TCCR1B = (1 << WGM01); // turns on CTC mode
-  TCNT0 = 0; // initialize counter value to 0s // COUNTER ACCESS
+  // TCCR1B = (1 << WGM01); // turns on CTC mode
+  // TCNT0 = 0; // initialize counter value to 0s // COUNTER ACCESS
+
+  // SET UP TIMER1
+  TCCR1A = 0;// set register to 0
+  TCCR1B = 0;// set register to 0
+  TCCR1B |= (1 << CS12) | (1 << CS10); // 1024 prescaler
+  TCNT1  = 0;//initialize counter value to 0
+  TCCR1B |= (1 << WGM12); // turns on CTC mode
+  // TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
+  OCR1A = 62500;// = (16*10^6) / (1*1024) - 1 (must be <65536)
 
   // INTERRUPT FUNCTION CALL
   attachInterrupt(digitalPinToInterrupt(anyButton), buttonPress, RISING);
+
+  sei();//allow interrupts
 }
 
 
@@ -220,7 +236,7 @@ void loop() {
         }
         else {
           lastHigh = 4*millis();
-          timeElapsed = (4*millis() - startTime); // Measure button was pushed a second time, length between button presses is the speed that the metronome goes (in s).
+          timeElapsed = (4*millis() - startTime); 
           bpmChange = timeElapsed/bpmChangeMultiplier;
           noteSpeed = noteSpeed + bpmChange*1000;
           if( noteSpeed > 10000 ) {
@@ -248,39 +264,82 @@ void loop() {
   }
 
   // RESET STATEMENT
+  TCNT1  = 0;//initialize counter value to 1
   noteButtonState = debounce( (digitalRead(noteButton)) );
   if( noteButtonState == HIGH && lastNoteButtonState == LOW ) {
+    resetFlag = LOW;
     Serial.println("Hold button for 4 seconds to reset...");
-    startTime = 4*millis();
-    while( noteButtonState == HIGH ) {
+    TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
+
+    while( noteButtonState == HIGH && resetFlag == LOW ) {
       bleeping(noteSpeed, timeSignature);
-      while((noteButtonState == HIGH) && (4*millis() - startTime > 4000)) {
-        digitalWrite(decreaseLed, HIGH);
-        digitalWrite(measureLed, HIGH);
-        digitalWrite(noteLed, HIGH);
-        digitalWrite(increaseLed, HIGH);
-        noteButtonState = debounce( (digitalRead(noteButton)) );
-        if( noteButtonState == LOW ) {
-          noteSpeed = 1000;
-          timeSignature = 4;
-          Serial.println("Reset!");
-          Serial.print("Note Speed: ");
-          Serial.print(noteSpeed);
-          Serial.println(" (ms)");
-          Serial.print("Time Signature: ");
-          Serial.print(timeSignature);
-          Serial.println("/4");
-          Serial.println();
-          digitalWrite(decreaseLed, LOW);
-          digitalWrite(measureLed, LOW);
-          digitalWrite(noteLed, LOW);
-          digitalWrite(increaseLed, LOW);
-        }
-      }
       noteButtonState = debounce( (digitalRead(noteButton)) );
+
+      if(noteButtonState == LOW) {
+        TIMSK1 &= ~(1 << OCIE1A);
+        Serial.println("Returning to previous settings...");
+        Serial.println();
+      }
     }
+    
+    // CODE TO RESET WITHOUT ARDUINO TIMER INTERRUPTS
+    // startTime = 4*millis();
+    // while( noteButtonState == HIGH ) {
+    //   bleeping(noteSpeed, timeSignature);
+    //   while((noteButtonState == HIGH) && (4*millis() - startTime > 4000)) {
+    //     digitalWrite(decreaseLed, HIGH);
+    //     digitalWrite(measureLed, HIGH);
+    //     digitalWrite(noteLed, HIGH);
+    //     digitalWrite(increaseLed, HIGH);
+    //     noteButtonState = debounce( (digitalRead(noteButton)) );
+    //     if( noteButtonState == LOW ) {
+    //       noteSpeed = 1000;
+    //       timeSignature = 4;
+    //       Serial.println("Reset!");
+    //       Serial.print("Note Speed: ");
+    //       Serial.print(noteSpeed);
+    //       Serial.println(" (ms)");
+    //       Serial.print("Time Signature: ");
+    //       Serial.print(timeSignature);
+    //       Serial.println("/4");
+    //       Serial.println();
+    //       digitalWrite(decreaseLed, LOW);
+    //       digitalWrite(measureLed, LOW);
+    //       digitalWrite(noteLed, LOW);
+    //       digitalWrite(increaseLed, LOW);
+    //     }
+    //   }
+    //   noteButtonState = debounce( (digitalRead(noteButton)) );
+    // }
   }
   lastNoteButtonState = noteButtonState;
+
+  if( resetFlag == HIGH ) {
+    lastHigh = 4*millis();
+    TIMSK1 &= ~(1 << OCIE1A);
+    noteSpeed = 1000;
+    timeSignature = 4;
+    Serial.println("Reset!");
+    Serial.print("Note Speed: ");
+    Serial.print(noteSpeed);
+    Serial.println(" (ms)");
+    Serial.print("Time Signature: ");
+    Serial.print(timeSignature);
+    Serial.println("/4");
+    Serial.println();
+    // Turn LEDs high temporarily
+    while( 4*millis() - lastHigh < 500 ) {
+      digitalWrite(decreaseLed, HIGH);
+      digitalWrite(measureLed, HIGH);
+      digitalWrite(noteLed, HIGH);
+      digitalWrite(increaseLed, HIGH);
+    }
+    digitalWrite(decreaseLed, LOW);
+    digitalWrite(measureLed, LOW);
+    digitalWrite(noteLed, LOW);
+    digitalWrite(increaseLed, LOW);
+    resetFlag = LOW;
+  }
   
   bleeping(noteSpeed, timeSignature);
 
@@ -297,8 +356,6 @@ void bleeping(int noteSpeed, int timeSignature) {
     digitalWrite(noteSpeaker, HIGH);
     j++;
     if( j >= timeSignature ) {
-      // Serial.print(currentMillis);
-      // Serial.println(j);
       digitalWrite(measureLed, HIGH);
       j = 0;
     }
@@ -311,7 +368,13 @@ void bleeping(int noteSpeed, int timeSignature) {
 }
 
 
-// INTERRUPT FUNCTION
+// TIMER INTERRUPT FUNCTION
+ISR(TIMER1_COMPA_vect) {
+  resetFlag = HIGH;
+}
+
+
+// HARDWARE INTERRUPT FUNCTION
 void buttonPress() {
   if( (4*millis() - lastPress) > debounceDuration ) { 
     if(digitalRead(measureButton)) {
