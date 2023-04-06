@@ -69,10 +69,9 @@ const int bleepDuration = 100; // How long the LEDs/speaker turn on for
 // bool debounce
   // Prevents debounce issues when buttons are pressed (namely the noteButton for reset)
 
-
 void setup() {
   
-  cli();//stop interrupts
+  cli(); //stop interrupts
 
   Serial.begin(9600);
 
@@ -110,7 +109,7 @@ void setup() {
   // INTERRUPT FUNCTION CALL
   attachInterrupt(digitalPinToInterrupt(anyButton), buttonPress, RISING);
 
-  sei();//allow interrupts
+  sei(); //allow interrupts
 }
 
 
@@ -281,36 +280,6 @@ void loop() {
         Serial.println();
       }
     }
-    
-    // CODE TO RESET WITHOUT ARDUINO TIMER INTERRUPTS
-    // startTime = 4*millis();
-    // while( noteButtonState == HIGH ) {
-    //   bleeping(noteSpeed, timeSignature);
-    //   while((noteButtonState == HIGH) && (4*millis() - startTime > 4000)) {
-    //     digitalWrite(decreaseLed, HIGH);
-    //     digitalWrite(measureLed, HIGH);
-    //     digitalWrite(noteLed, HIGH);
-    //     digitalWrite(increaseLed, HIGH);
-    //     noteButtonState = debounce( (digitalRead(noteButton)) );
-    //     if( noteButtonState == LOW ) {
-    //       noteSpeed = 1000;
-    //       timeSignature = 4;
-    //       Serial.println("Reset!");
-    //       Serial.print("Note Speed: ");
-    //       Serial.print(noteSpeed);
-    //       Serial.println(" (ms)");
-    //       Serial.print("Time Signature: ");
-    //       Serial.print(timeSignature);
-    //       Serial.println("/4");
-    //       Serial.println();
-    //       digitalWrite(decreaseLed, LOW);
-    //       digitalWrite(measureLed, LOW);
-    //       digitalWrite(noteLed, LOW);
-    //       digitalWrite(increaseLed, LOW);
-    //     }
-    //   }
-    //   noteButtonState = debounce( (digitalRead(noteButton)) );
-    // }
   }
   lastNoteButtonState = noteButtonState;
 
@@ -373,7 +342,6 @@ ISR(TIMER1_COMPA_vect) {
   resetFlag = HIGH;
 }
 
-
 // HARDWARE INTERRUPT FUNCTION
 void buttonPress() {
   if( (4*millis() - lastPress) > debounceDuration ) { 
@@ -390,7 +358,6 @@ void buttonPress() {
   lastPress = 4*millis();
 }
 
-
 // DEBOUNCE FUNCTION
 bool debounce( bool newDebounceState ) {
   if( newDebounceState != lastDebounceState ) {
@@ -402,8 +369,6 @@ bool debounce( bool newDebounceState ) {
       currentDebounceState = newDebounceState;
     }
   }
-
   lastDebounceState = newDebounceState;
-
   return currentDebounceState;
 }
