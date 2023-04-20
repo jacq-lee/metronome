@@ -36,6 +36,7 @@ unsigned long debounceDuration = 50;
 bool measuring = LOW;
 bool noteMeasuring = HIGH;
 bool resetFlag;
+// volatile bool resetFlag;
   // Used for tracking the time between button presses
 unsigned long startTime;
 unsigned long timeElapsed;
